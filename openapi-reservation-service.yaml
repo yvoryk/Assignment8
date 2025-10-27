@@ -1,0 +1,293 @@
+openapi: 3.0.3
+info:
+  title: Movie Theater Seat Reservation API
+  description: |
+    This API manages seat reservations for movie theater bookings. Reservations are held 
+    for 15 minutes to allow payment completion. After expiration, seats are released.
+    
+    Features: Create reservations, retrieve details, cancel before payment, automatic 
+    expiration handling, and real-time seat availability validation.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api-support@movietheater.com
+
+servers:
+  - url: https://api.movietheater.com/v1
+    description: Production server
+
+paths:
+  /reservations:
+    post:
+      summary: Create a new seat reservation
+      description: Creates a reservation for selected seats at a showtime. Held for 15 minutes.
+      tags:
+        - Reservations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - showtimeId
+                - seatIds
+                - customerEmail
+              properties:
+                showtimeId:
+                  type: string
+                  format: uuid
+                  example: "7f3e4d2a-8b9c-4e5f-a1b2-3c4d5e6f7a8b"
+                seatIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  example: ["a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"]
+                customerEmail:
+                  type: string
+                  format: email
+                  example: "customer@example.com"
+                ticketTypes:
+                  type: array
+                  items:
+                    type: string
+                    enum: [adult, child, senior, student]
+                  example: ["adult", "child"]
+      responses:
+        '201':
+          description: Reservation created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reservationId:
+                    type: string
+                    format: uuid
+                    example: "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"
+                  seats:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        row:
+                          type: string
+                          example: "F"
+                        number:
+                          type: integer
+                          example: 12
+                        price:
+                          type: number
+                          example: 15.99
+                  totalPrice:
+                    type: number
+                    example: 47.97
+                  status:
+                    type: string
+                    example: "pending"
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    example: "2025-10-27T14:45:00Z"
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid request"
+                  message:
+                    type: string
+                    example: "Seat IDs cannot be empty"
+        '409':
+          description: Seats already reserved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Seats unavailable"
+                  message:
+                    type: string
+                    example: "Selected seats are no longer available"
+
+  /reservations/{reservationId}:
+    get:
+      summary: Retrieve a reservation by ID
+      description: Gets reservation details including seats, pricing, and status.
+      tags:
+        - Reservations
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"
+        - name: customerEmail
+          in: query
+          required: false
+          schema:
+            type: string
+            format: email
+          example: "customer@example.com"
+      responses:
+        '200':
+          description: Reservation found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reservationId:
+                    type: string
+                    example: "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"
+                  movieTitle:
+                    type: string
+                    example: "The Matrix Resurrections"
+                  showtime:
+                    type: string
+                    format: date-time
+                    example: "2025-10-28T19:30:00Z"
+                  seats:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        row:
+                          type: string
+                          example: "F"
+                        number:
+                          type: integer
+                          example: 12
+                        price:
+                          type: number
+                          example: 15.99
+                  totalPrice:
+                    type: number
+                    example: 47.97
+                  status:
+                    type: string
+                    example: "pending"
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    example: "2025-10-27T14:45:00Z"
+        '404':
+          description: Reservation not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Reservation not found"
+                  message:
+                    type: string
+                    example: "No reservation with this ID"
+        '403':
+          description: Unauthorized access
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access denied"
+                  message:
+                    type: string
+                    example: "No permission to view this reservation"
+
+    delete:
+      summary: Cancel a reservation
+      description: Cancels reservation and releases seats. Only pending reservations can be cancelled.
+      tags:
+        - Reservations
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"
+        - name: customerEmail
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+          example: "customer@example.com"
+      responses:
+        '200':
+          description: Reservation cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reservationId:
+                    type: string
+                    example: "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a"
+                  status:
+                    type: string
+                    example: "cancelled"
+                  message:
+                    type: string
+                    example: "Reservation cancelled successfully"
+                  cancelledAt:
+                    type: string
+                    format: date-time
+                    example: "2025-10-27T14:35:00Z"
+        '404':
+          description: Reservation not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Reservation not found"
+                  message:
+                    type: string
+                    example: "No reservation with this ID"
+        '403':
+          description: Unauthorized to cancel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access denied"
+                  message:
+                    type: string
+                    example: "No permission to cancel this reservation"
+        '409':
+          description: Cannot be cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Cannot cancel"
+                  message:
+                    type: string
+                    example: "Reservation already confirmed. Contact support."
+
+tags:
+  - name: Reservations
+    description: Seat reservation operations
